@@ -21,7 +21,7 @@ function AccountPage() {
     (async () => {
       const { data: u } = await supabase.auth.getUser();
       if (!u.user) return;
-      setEmail(u.user.email || u.user.phone || "");
+      setEmail(u.user.email || "");
       const { data: p } = await supabase.from("profiles").select("*").eq("id", u.user.id).maybeSingle();
       setName((p?.name as string) || "");
       setVenmo((p?.venmo_handle as string) || "");

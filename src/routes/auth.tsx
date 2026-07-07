@@ -10,23 +10,19 @@ export const Route = createFileRoute("/auth")({
 });
 
 type Mode = "signin" | "signup" | "forgot";
-type Method = "email" | "phone";
 
 function AuthPage() {
   const nav = useNavigate();
   const [mode, setMode] = useState<Mode>("signin");
-  const [method, setMethod] = useState<Method>("email");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const creds = method === "email" ? { email, password } : { phone, password };
-    const { error } = await supabase.auth.signInWithPassword(creds as any);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success("Welcome back");
@@ -38,10 +34,7 @@ function AuthPage() {
     if (!name.trim()) return toast.error("Please enter your name");
     setLoading(true);
     const options = { data: { name }, emailRedirectTo: `${window.location.origin}/auth` };
-    const payload: any = method === "email"
-      ? { email, password, options }
-      : { phone, password, options };
-    const { data, error } = await supabase.auth.signUp(payload);
+    const { data, error } = await supabase.auth.signUp({ email, password, options });
     setLoading(false);
     if (error) return toast.error(error.message);
     if (data.session) {
@@ -86,28 +79,9 @@ function AuthPage() {
             <div className="text-[0.62rem] tracking-[0.2em] text-brown uppercase mono">no. 001</div>
           </div>
 
-          {mode !== "forgot" && (
-            <div className="flex gap-2 mb-5">
-              <button
-                type="button"
-                onClick={() => setMethod("email")}
-                className={`flex-1 py-2 text-[0.7rem] tracking-[0.22em] uppercase font-bold border ${method === "email" ? "bg-ink text-paper border-ink" : "bg-transparent text-ink border-ink/30"}`}
-              >Email</button>
-              <button
-                type="button"
-                onClick={() => setMethod("phone")}
-                className={`flex-1 py-2 text-[0.7rem] tracking-[0.22em] uppercase font-bold border ${method === "phone" ? "bg-ink text-paper border-ink" : "bg-transparent text-ink border-ink/30"}`}
-              >Phone</button>
-            </div>
-          )}
-
           {mode === "signin" && (
             <form onSubmit={handleSignIn} className="space-y-3">
-              {method === "email" ? (
-                <Field label="Email"><input type="email" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
-              ) : (
-                <Field label="Phone (with country code)"><input type="tel" required placeholder="+15551234567" value={phone} onChange={e => setPhone(e.target.value)} /></Field>
-              )}
+              <Field label="Email"><input type="email" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
               <Field label="Password"><input type="password" required value={password} onChange={e => setPassword(e.target.value)} /></Field>
               <button className="btn-burnt w-full mt-2" disabled={loading}>{loading ? "…" : "Sign in"}</button>
               <div className="flex justify-between pt-2 text-[0.72rem] tracking-[0.16em] uppercase font-semibold">
@@ -120,11 +94,7 @@ function AuthPage() {
           {mode === "signup" && (
             <form onSubmit={handleSignUp} className="space-y-3">
               <Field label="Your name"><input type="text" required value={name} onChange={e => setName(e.target.value)} /></Field>
-              {method === "email" ? (
-                <Field label="Email"><input type="email" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
-              ) : (
-                <Field label="Phone (with country code)"><input type="tel" required placeholder="+15551234567" value={phone} onChange={e => setPhone(e.target.value)} /></Field>
-              )}
+              <Field label="Email"><input type="email" required value={email} onChange={e => setEmail(e.target.value)} /></Field>
               <Field label="Password"><input type="password" minLength={6} required value={password} onChange={e => setPassword(e.target.value)} /></Field>
               <button className="btn-burnt w-full mt-2" disabled={loading}>{loading ? "…" : "Open my tab"}</button>
               <div className="flex justify-center pt-2 text-[0.72rem] tracking-[0.16em] uppercase font-semibold">
