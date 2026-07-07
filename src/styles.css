@@ -210,9 +210,9 @@
   padding: 0.95rem 1.2rem; font-size: 0.85rem;
   border-radius: var(--radius);
   transition: transform 80ms, background 120ms;
+  &:hover { background: var(--ink-2); }
+  &:active { transform: translateY(1px); }
 }
-@utility btn-ink:hover { background: var(--ink-2); }
-@utility btn-ink:active { transform: translateY(1px); }
 
 @utility btn-burnt {
   display: inline-flex; align-items: center; justify-content: center;
@@ -221,9 +221,9 @@
   padding: 0.95rem 1.2rem; font-size: 0.85rem;
   border-radius: var(--radius);
   transition: transform 80ms, background 120ms;
+  &:hover { background: var(--burnt-2); }
+  &:active { transform: translateY(1px); }
 }
-@utility btn-burnt:hover { background: var(--burnt-2); }
-@utility btn-burnt:active { transform: translateY(1px); }
 
 @utility btn-ghost {
   display: inline-flex; align-items: center; justify-content: center;
