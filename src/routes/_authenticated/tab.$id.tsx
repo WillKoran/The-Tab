@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
-import { Check, Plus, ChevronLeft, Trash2, X } from "lucide-react";
+import { Check, Plus, Camera, ChevronLeft, Trash2, X } from "lucide-react";
 import { computeTotals, money, venmoDeepLink, type Guest, type Item } from "@/lib/tab-math";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ function TabScreen() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddGuest, setShowAddGuest] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const [{ data: t }, { data: g }, { data: i }, { data: r }, { data: u }] = await Promise.all([
@@ -91,6 +92,16 @@ function TabScreen() {
   async function removeItem(iid: string) {
     await supabase.from("tab_items").delete().eq("id", iid);
     load();
+  }
+  async function updateItem(iid: string, patch: { name?: string; price?: number; quantity?: number }) {
+    setItems(cur => cur.map(it => it.id === iid ? { ...it, ...patch } : it));
+    await supabase.from("tab_items").update(patch).eq("id", iid);
+  }
+  function handleReceiptCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    toast.message("Got the photo — receipt scanning isn't set up yet, add items manually for now.");
   }
   async function toggleAssign(itemId: string, guestId: string) {
     const item = items.find(x => x.id === itemId);
@@ -194,10 +205,24 @@ function TabScreen() {
           <span className="fold-crease" />
           <div className="flex items-center justify-between mb-3">
             <h2 className="display text-lg uppercase text-ink">What we had</h2>
-            <button onClick={() => setShowAddItem(true)} className="stamp stamp-burnt">
-              <Plus size={10} strokeWidth={3}/> Item
+            <button onClick={() => receiptInputRef.current?.click()} className="stamp stamp-burnt">
+              <Camera size={10} strokeWidth={3}/> Scan your receipt
             </button>
+            <input
+              ref={receiptInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleReceiptCapture}
+              className="hidden"
+            />
           </div>
+          <button
+            onClick={() => setShowAddItem(true)}
+            className="w-full mb-4 py-2 border border-ink/25 text-ink text-[0.7rem] tracking-[0.16em] uppercase font-bold flex items-center justify-center gap-1.5 hover:bg-tan/40"
+          >
+            <Plus size={12} strokeWidth={3}/> Add item manually
+          </button>
 
           {items.length === 0 && <p className="text-brown text-sm py-3">No items yet.</p>}
 
@@ -207,16 +232,40 @@ function TabScreen() {
               {list.map((it, idx) => (
                 <div key={it.id}>
                   <div className="py-2.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 bg-tan flex items-center justify-center mono text-xs font-bold text-ink shrink-0">{it.quantity}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="uppercase text-sm font-semibold text-ink tracking-[0.06em] truncate">{it.name}</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number" min="1"
+                        value={it.quantity}
+                        onChange={e => updateItem(it.id, { quantity: Math.max(1, Number(e.target.value) || 1) })}
+                        className="w-9 h-9 bg-tan text-center mono text-xs font-bold text-ink shrink-0 rounded-sm border border-ink/20 p-0 focus:outline-none focus:border-burnt focus:ring-1 focus:ring-burnt/40"
+                        style={{ boxShadow: "none" }}
+                      />
+                      <input
+                        type="text"
+                        value={it.name}
+                        onChange={e => updateItem(it.id, { name: e.target.value })}
+                        className="flex-1 min-w-0 uppercase text-sm font-semibold text-ink tracking-[0.06em] bg-transparent rounded-sm border border-ink/20 px-2 py-1.5 focus:outline-none focus:border-burnt focus:ring-1 focus:ring-burnt/40"
+                        style={{ boxShadow: "none" }}
+                      />
+                      <div className="flex items-center gap-1 shrink-0 rounded-sm border border-ink/20 px-1.5 py-1.5 focus-within:border-burnt focus-within:ring-1 focus-within:ring-burnt/40">
+                        <span className="mono text-xs text-brown">$</span>
+                        <input
+                          type="number" step="0.01" min="0"
+                          value={it.price}
+                          onChange={e => updateItem(it.id, { price: Number(e.target.value) || 0 })}
+                          className="w-14 mono font-bold text-ink text-right bg-transparent border-0 p-0 focus:outline-none focus:ring-0"
+                          style={{ boxShadow: "none" }}
+                        />
                       </div>
-                      <div className="mono font-bold text-ink">{money(it.price * it.quantity)}</div>
                       <button onClick={() => removeItem(it.id)} className="text-brown/60 hover:text-burnt ml-1">
                         <X size={14} />
                       </button>
                     </div>
+                    {it.quantity > 1 && (
+                      <div className="text-[0.62rem] text-brown mono pl-11 -mt-1">
+                        {it.quantity} × {money(it.price)} = {money(it.price * it.quantity)}
+                      </div>
+                    )}
                     <div className="flex flex-wrap gap-1.5 mt-2 pl-9">
                       {guests.map(g => {
                         const on = it.guest_ids.includes(g.id);
@@ -250,24 +299,25 @@ function TabScreen() {
         <div className="paper-fold px-5 py-5">
           <span className="fold-crease" />
           <h2 className="display text-lg uppercase text-ink mb-3">Tax &amp; Tip</h2>
-          <TaxTipRow
-            label="Tax"
-            value={tab.tax_value} isPercent={tab.tax_is_percent}
-            onValue={v => saveTaxTip({ tax_value: v })}
-            onToggle={p => saveTaxTip({ tax_is_percent: p })}
-          />
-          <div className="hairline my-3" />
-          <TaxTipRow
-            label="Tip"
-            value={tab.tip_value} isPercent={tab.tip_is_percent}
-            onValue={v => saveTaxTip({ tip_value: v })}
-            onToggle={p => saveTaxTip({ tip_is_percent: p })}
-          />
+          <div className="flex gap-4">
+            <TaxTipRow
+              label="Tax"
+              value={tab.tax_value} isPercent={tab.tax_is_percent}
+              onValue={v => saveTaxTip({ tax_value: v })}
+              onToggle={p => saveTaxTip({ tax_is_percent: p })}
+            />
+            <TaxTipRow
+              label="Tip"
+              value={tab.tip_value} isPercent={tab.tip_is_percent}
+              onValue={v => saveTaxTip({ tip_value: v })}
+              onToggle={p => saveTaxTip({ tip_is_percent: p })}
+            />
+          </div>
           {tab.tip_is_percent && (
-            <div className="flex gap-2 mt-3">
+            <div className="flex gap-1.5 mt-2">
               {[15, 18, 20, 25].map(p => (
                 <button key={p} onClick={() => saveTaxTip({ tip_value: p, tip_is_percent: true })}
-                  className={`flex-1 py-1.5 text-[0.7rem] tracking-[0.14em] uppercase font-bold border ${Number(tab.tip_value) === p ? "bg-ink text-paper border-ink" : "border-ink/25 text-ink"}`}>
+                  className={`flex-1 py-1 text-[0.6rem] tracking-[0.1em] uppercase font-bold border ${Number(tab.tip_value) === p ? "bg-ink text-paper border-ink" : "border-ink/25 text-ink"}`}>
                   {p}%
                 </button>
               ))}
@@ -338,19 +388,21 @@ function TaxTipRow({ label, value, isPercent, onValue, onToggle }: {
   onValue: (v: number) => void; onToggle: (isPercent: boolean) => void;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="text-[0.72rem] tracking-[0.22em] uppercase font-bold text-brown w-10">{label}</div>
+    <div className="flex-1 min-w-0 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="text-[0.72rem] tracking-[0.22em] uppercase font-bold text-brown">{label}</div>
+        <div className="flex border border-ink/25 shrink-0">
+          <button type="button" onClick={() => onToggle(true)}
+            className={`px-2 py-1 text-[0.7rem] font-bold ${isPercent ? "bg-ink text-paper" : "text-ink"}`}>%</button>
+          <button type="button" onClick={() => onToggle(false)}
+            className={`px-2 py-1 text-[0.7rem] font-bold ${!isPercent ? "bg-ink text-paper" : "text-ink"}`}>$</button>
+        </div>
+      </div>
       <input
         type="number" step="0.01" min="0"
         value={value} onChange={e => onValue(Number(e.target.value) || 0)}
-        className="flex-1 mono"
+        className="w-full min-w-0 mono"
       />
-      <div className="flex border border-ink/25">
-        <button type="button" onClick={() => onToggle(true)}
-          className={`px-2 py-1 text-[0.7rem] font-bold ${isPercent ? "bg-ink text-paper" : "text-ink"}`}>%</button>
-        <button type="button" onClick={() => onToggle(false)}
-          className={`px-2 py-1 text-[0.7rem] font-bold ${!isPercent ? "bg-ink text-paper" : "text-ink"}`}>$</button>
-      </div>
     </div>
   );
 }
@@ -377,7 +429,7 @@ function AddGuestSheet({ onClose, onAdd, regulars }: {
           <h3 className="display text-xl uppercase text-ink">Add guest</h3>
           <button onClick={onClose}><X size={20} /></button>
         </div>
-        <form onSubmit={e => { e.preventDefault(); onAdd(name); setName(""); onClose(); }} className="space-y-3">
+        <form onSubmit={e => { e.preventDefault(); if (!name.trim()) return; onAdd(name); setName(""); }} className="space-y-3">
           <label className="block">
             <div className="text-[0.62rem] tracking-[0.22em] uppercase font-bold text-brown mb-1">Name</div>
             <input value={name} onChange={e => setName(e.target.value)} required autoFocus />
@@ -389,7 +441,7 @@ function AddGuestSheet({ onClose, onAdd, regulars }: {
             <div className="text-[0.62rem] tracking-[0.22em] uppercase font-bold text-brown mb-2">From Regulars</div>
             <div className="grid grid-cols-2 gap-2">
               {regulars.map(r => (
-                <button key={r.id} onClick={() => { onAdd(r.name); onClose(); }}
+                <button key={r.id} onClick={() => onAdd(r.name)}
                   className="bg-tan/60 border border-ink/15 px-3 py-2 text-left hover:bg-tan">
                   <div className="font-semibold text-ink text-sm">{r.name}</div>
                   <div className="mono text-xs text-brown">{r.phone || "—"}</div>
@@ -398,6 +450,7 @@ function AddGuestSheet({ onClose, onAdd, regulars }: {
             </div>
           </div>
         )}
+        <button onClick={onClose} className="btn-ghost w-full mt-5">Done</button>
       </div>
     </Sheet>
   );

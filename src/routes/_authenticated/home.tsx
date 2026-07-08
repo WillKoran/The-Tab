@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { BottomNav } from "@/components/BottomNav";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { computeTotals, money, type Item, type Guest } from "@/lib/tab-math";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ function Home() {
   const [regulars, setRegulars] = useState<Regular[]>([]);
   const [profileName, setProfileName] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showNewTab, setShowNewTab] = useState(false);
 
   async function load() {
     const [{ data: t }, { data: r }, { data: u }] = await Promise.all([
@@ -47,13 +48,13 @@ function Home() {
   }
   useEffect(() => { load(); }, []);
 
-  async function openNewTab() {
+  async function openNewTab(name: string) {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
     const { data: profile } = await supabase.from("profiles").select("name, venmo_handle").eq("id", userData.user.id).maybeSingle();
     const { data: tab, error } = await supabase.from("tabs").insert({
       user_id: userData.user.id,
-      name: "Dinner",
+      name: name.trim() || "Dinner",
       table_label: "TABLE 1",
     }).select().single();
     if (error || !tab) return toast.error(error?.message || "Could not open tab");
@@ -63,6 +64,7 @@ function Home() {
       is_you: true,
       venmo_handle: (profile?.venmo_handle as string) || "",
     });
+    setShowNewTab(false);
     nav({ to: "/tab/$id", params: { id: tab.id } });
   }
 
@@ -76,7 +78,7 @@ function Home() {
             <div className="text-sm mono">{profileName || "friend"}</div>
           </div>
         </div>
-        <button onClick={openNewTab} className="btn-burnt w-full mt-6">
+        <button onClick={() => setShowNewTab(true)} className="btn-burnt w-full mt-6">
           <Plus size={16} className="mr-2" strokeWidth={3} /> Open a Tab
         </button>
       </header>
@@ -117,6 +119,33 @@ function Home() {
       </section>
 
       <BottomNav />
+
+      {showNewTab && (
+        <NewTabSheet onClose={() => setShowNewTab(false)} onCreate={openNewTab} />
+      )}
+    </div>
+  );
+}
+
+function NewTabSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => void }) {
+  const [name, setName] = useState("Dinner");
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/50" onClick={onClose}>
+      <div className="w-full max-w-md bg-paper max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="px-5 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="display text-xl uppercase text-ink">Name this tab</h3>
+            <button onClick={onClose}><X size={20} /></button>
+          </div>
+          <form onSubmit={e => { e.preventDefault(); onCreate(name); }} className="space-y-3">
+            <label className="block">
+              <div className="text-[0.62rem] tracking-[0.22em] uppercase font-bold text-brown mb-1">Table / dinner name</div>
+              <input value={name} onChange={e => setName(e.target.value)} required autoFocus placeholder="e.g. Friday Dinner" />
+            </label>
+            <button className="btn-burnt w-full">Open Tab</button>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

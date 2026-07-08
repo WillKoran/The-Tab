@@ -64,27 +64,33 @@ export type Database = {
       }
       tab_guests: {
         Row: {
+          claim_token: string
           created_at: string
           id: string
           is_you: boolean
           name: string
           tab_id: string
+          user_id: string | null
           venmo_handle: string | null
         }
         Insert: {
+          claim_token?: string
           created_at?: string
           id?: string
           is_you?: boolean
           name: string
           tab_id: string
+          user_id?: string | null
           venmo_handle?: string | null
         }
         Update: {
+          claim_token?: string
           created_at?: string
           id?: string
           is_you?: boolean
           name?: string
           tab_id?: string
+          user_id?: string | null
           venmo_handle?: string | null
         }
         Relationships: [
@@ -212,7 +218,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_guest_seat: {
+        Args: { p_token: string }
+        Returns: {
+          tab_id: string
+        }[]
+      }
+      is_tab_member: { Args: { p_tab_id: string }; Returns: boolean }
+      is_tab_member_via_item: { Args: { p_item_id: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
