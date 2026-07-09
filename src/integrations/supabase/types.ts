@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      guest_identities: {
+        Row: {
+          auth_user_id: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          phone_number: string
+        }
+        Insert: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          phone_number: string
+        }
+        Update: {
+          auth_user_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          phone_number?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -66,6 +90,7 @@ export type Database = {
         Row: {
           claim_token: string
           created_at: string
+          guest_identity_id: string | null
           id: string
           is_you: boolean
           name: string
@@ -76,6 +101,7 @@ export type Database = {
         Insert: {
           claim_token?: string
           created_at?: string
+          guest_identity_id?: string | null
           id?: string
           is_you?: boolean
           name: string
@@ -86,6 +112,7 @@ export type Database = {
         Update: {
           claim_token?: string
           created_at?: string
+          guest_identity_id?: string | null
           id?: string
           is_you?: boolean
           name?: string
@@ -94,6 +121,13 @@ export type Database = {
           venmo_handle?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "tab_guests_guest_identity_id_fkey"
+            columns: ["guest_identity_id"]
+            isOneToOne: false
+            referencedRelation: "guest_identities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tab_guests_tab_id_fkey"
             columns: ["tab_id"]
@@ -226,6 +260,16 @@ export type Database = {
       }
       is_tab_member: { Args: { p_tab_id: string }; Returns: boolean }
       is_tab_member_via_item: { Args: { p_item_id: string }; Returns: boolean }
+      upsert_guest_identity: {
+        Args: { p_display_name?: string | null; p_phone_number: string }
+        Returns: {
+          auth_user_id: string
+          created_at: string
+          display_name: string
+          id: string
+          phone_number: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

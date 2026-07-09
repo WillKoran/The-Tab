@@ -1,5 +1,20 @@
-export interface Guest { id: string; name: string; is_you: boolean; venmo_handle?: string | null }
-export interface Item { id: string; name: string; price: number; quantity: number; category: string; guest_ids: string[] }
+export interface Guest {
+  id: string;
+  name: string;
+  is_you: boolean;
+  venmo_handle?: string | null;
+  user_id?: string | null;
+  claim_token?: string;
+  phone_number?: string | null;
+}
+export interface Item {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  category: string;
+  guest_ids: string[];
+}
 
 export interface Totals {
   subtotal: number;
@@ -17,13 +32,15 @@ export function computeTotals(
   tip: { value: number; isPercent: boolean },
 ): Totals {
   const perGuestSubtotal: Record<string, number> = {};
-  guests.forEach(g => { perGuestSubtotal[g.id] = 0; });
+  guests.forEach((g) => {
+    perGuestSubtotal[g.id] = 0;
+  });
 
   let subtotal = 0;
   for (const item of items) {
     const line = Number(item.price) * Number(item.quantity || 1);
     subtotal += line;
-    const assigned = item.guest_ids.filter(id => perGuestSubtotal[id] !== undefined);
+    const assigned = item.guest_ids.filter((id) => perGuestSubtotal[id] !== undefined);
     if (assigned.length === 0) continue;
     const share = line / assigned.length;
     for (const gid of assigned) perGuestSubtotal[gid] += share;
