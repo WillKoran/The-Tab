@@ -44,19 +44,20 @@ CREATE POLICY "read own or tab-linked guest identity" ON public.guest_identities
 
 -- Upsert-by-phone: returns the existing identity unchanged if the phone
 -- number is already known, otherwise creates a new (unclaimed) one.
+-- LANGUAGE sql (not plpgsql): a plpgsql function with RETURNS TABLE(phone_number ...)
+-- auto-declares a local `phone_number` variable, which collides with the bare
+-- (unqualifiable) `phone_number` in ON CONFLICT (phone_number) below and raises
+-- "column reference is ambiguous". Plain SQL functions have no such variable.
 CREATE OR REPLACE FUNCTION public.upsert_guest_identity(p_phone_number TEXT, p_display_name TEXT DEFAULT NULL)
 RETURNS TABLE(id UUID, phone_number TEXT, display_name TEXT, auth_user_id UUID, created_at TIMESTAMPTZ)
-LANGUAGE plpgsql
+LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-BEGIN
-  RETURN QUERY
   INSERT INTO public.guest_identities AS gi (phone_number, display_name)
   VALUES (p_phone_number, p_display_name)
   ON CONFLICT (phone_number) DO UPDATE SET phone_number = gi.phone_number
   RETURNING gi.id, gi.phone_number, gi.display_name, gi.auth_user_id, gi.created_at;
-END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.upsert_guest_identity(TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.upsert_guest_identity(TEXT, TEXT) TO authenticated, service_role;

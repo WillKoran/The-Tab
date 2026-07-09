@@ -31,7 +31,7 @@ export async function upsertGuestUser(
     p_phone_number: normalized,
     p_display_name: displayName ?? null,
   });
-  if (error) throw error;
+  if (error) throw new Error(error.message);
   const row = data?.[0];
   if (!row) throw new Error("upsert_guest_identity returned no row");
   return row;
