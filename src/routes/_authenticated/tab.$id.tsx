@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { InviteGuestButton } from "@/components/InviteGuestButton";
-import { Check, Plus, Camera, ChevronLeft, Trash2, X } from "lucide-react";
+import { ReceiptReviewSheet, type ReceiptConfirmResult } from "@/components/ReceiptReviewSheet";
+import { Check, Plus, Camera, ChevronLeft, Loader2, Trash2, X } from "lucide-react";
 import { computeTotals, money, venmoDeepLink, type Guest, type Item } from "@/lib/tab-math";
 import { upsertGuestUser } from "@/lib/guests";
+import { scanReceipt, type ScannedReceipt } from "@/lib/receipt-ocr";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/tab/$id")({
@@ -41,6 +43,10 @@ function TabScreen() {
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddGuest, setShowAddGuest] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [lastReceiptFile, setLastReceiptFile] = useState<File | null>(null);
+  const [scannedReceipt, setScannedReceipt] = useState<ScannedReceipt | null>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -175,7 +181,65 @@ function TabScreen() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    toast.message("Got the photo — receipt scanning isn't set up yet, add items manually for now.");
+    runOcr(file);
+  }
+  async function runOcr(file: File) {
+    setLastReceiptFile(file);
+    setOcrError(null);
+    setOcrStatus("loading");
+    try {
+      const receipt = await scanReceipt(file);
+      setScannedReceipt(receipt);
+      setOcrStatus("idle");
+    } catch (err) {
+      setOcrStatus("error");
+      setOcrError(err instanceof Error ? err.message : "Receipt scan failed.");
+    }
+  }
+  async function confirmReceipt(result: ReceiptConfirmResult) {
+    if (!tab) return;
+    const { data: inserted, error: itemsError } = await supabase
+      .from("tab_items")
+      .insert(
+        result.items.map((it) => ({
+          tab_id: id,
+          name: it.name,
+          price: it.price,
+          quantity: it.quantity,
+          category: "food",
+        })),
+      )
+      .select();
+    if (itemsError) {
+      toast.error(itemsError.message);
+      return;
+    }
+
+    const guestIds = guests.map((g) => g.id);
+    if (guestIds.length && inserted?.length) {
+      const { error: assignError } = await supabase
+        .from("tab_item_assignments")
+        .insert(
+          inserted.flatMap((item) => guestIds.map((guest_id) => ({ item_id: item.id, guest_id }))),
+        );
+      if (assignError) toast.error(assignError.message);
+    }
+
+    await supabase
+      .from("tabs")
+      .update({
+        tax_value: result.tax.value,
+        tax_is_percent: result.tax.isPercent,
+        tip_value: result.tip.value,
+        tip_is_percent: result.tip.isPercent,
+      })
+      .eq("id", id);
+
+    setScannedReceipt(null);
+    toast.success(
+      `Added ${result.items.length} item${result.items.length === 1 ? "" : "s"} from receipt`,
+    );
+    load();
   }
   async function toggleAssign(itemId: string, guestId: string) {
     const item = items.find((x) => x.id === itemId);
@@ -317,8 +381,17 @@ function TabScreen() {
           <span className="fold-crease" />
           <div className="flex items-center justify-between mb-3">
             <h2 className="display text-lg uppercase text-ink">What we had</h2>
-            <button onClick={() => receiptInputRef.current?.click()} className="stamp stamp-burnt">
-              <Camera size={10} strokeWidth={3} /> Scan your receipt
+            <button
+              onClick={() => receiptInputRef.current?.click()}
+              disabled={ocrStatus === "loading"}
+              className="stamp stamp-burnt disabled:opacity-50"
+            >
+              {ocrStatus === "loading" ? (
+                <Loader2 size={10} strokeWidth={3} className="animate-spin" />
+              ) : (
+                <Camera size={10} strokeWidth={3} />
+              )}
+              {ocrStatus === "loading" ? "Scanning…" : "Scan your receipt"}
             </button>
             <input
               ref={receiptInputRef}
@@ -329,6 +402,34 @@ function TabScreen() {
               className="hidden"
             />
           </div>
+          {ocrStatus === "loading" && (
+            <p className="text-brown text-xs mb-3 leading-snug">
+              Reading your receipt — this takes a few seconds.
+            </p>
+          )}
+          {ocrStatus === "error" && (
+            <div className="mb-4 border border-burnt/40 bg-burnt/5 px-3 py-3 space-y-2">
+              <p className="text-burnt text-xs leading-snug">{ocrError}</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => lastReceiptFile && runOcr(lastReceiptFile)}
+                  className="flex-1 py-1.5 border border-burnt text-burnt text-[0.65rem] tracking-[0.14em] uppercase font-bold"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => {
+                    setOcrStatus("idle");
+                    setOcrError(null);
+                    setShowAddItem(true);
+                  }}
+                  className="flex-1 py-1.5 border border-ink/25 text-ink text-[0.65rem] tracking-[0.14em] uppercase font-bold"
+                >
+                  Enter manually
+                </button>
+              </div>
+            </div>
+          )}
           <button
             onClick={() => setShowAddItem(true)}
             className="w-full mb-4 py-2 border border-ink/25 text-ink text-[0.7rem] tracking-[0.16em] uppercase font-bold flex items-center justify-center gap-1.5 hover:bg-tan/40"
@@ -518,6 +619,13 @@ function TabScreen() {
           guests={guests}
           perGuest={totals.perGuestTotal}
           tabName={tab.name}
+        />
+      )}
+      {scannedReceipt && (
+        <ReceiptReviewSheet
+          receipt={scannedReceipt}
+          onClose={() => setScannedReceipt(null)}
+          onConfirm={confirmReceipt}
         />
       )}
     </div>
