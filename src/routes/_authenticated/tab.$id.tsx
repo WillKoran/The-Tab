@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Wordmark } from "@/components/Wordmark";
 import { InviteGuestButton } from "@/components/InviteGuestButton";
 import { ReceiptReviewSheet, type ReceiptConfirmResult } from "@/components/ReceiptReviewSheet";
-import { Check, Plus, Camera, ChevronLeft, Loader2, Trash2, X } from "lucide-react";
+import { Check, Plus, Camera, ChevronLeft, Loader2, Trash2, Upload, X } from "lucide-react";
 import { computeTotals, money, venmoDeepLink, type Guest, type Item } from "@/lib/tab-math";
 import { upsertGuestUser } from "@/lib/guests";
 import { scanReceipt, type ScannedReceipt } from "@/lib/receipt-ocr";
@@ -47,7 +47,8 @@ function TabScreen() {
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [lastReceiptFile, setLastReceiptFile] = useState<File | null>(null);
   const [scannedReceipt, setScannedReceipt] = useState<ScannedReceipt | null>(null);
-  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
     const [{ data: t }, { data: g }, { data: i }, { data: r }, { data: u }] = await Promise.all([
@@ -381,23 +382,40 @@ function TabScreen() {
           <span className="fold-crease" />
           <div className="flex items-center justify-between mb-3">
             <h2 className="display text-lg uppercase text-ink">What we had</h2>
+          </div>
+          <div className="flex gap-2 mb-3">
             <button
-              onClick={() => receiptInputRef.current?.click()}
+              onClick={() => cameraInputRef.current?.click()}
               disabled={ocrStatus === "loading"}
-              className="stamp stamp-burnt disabled:opacity-50"
+              className="stamp stamp-burnt flex-1 justify-center disabled:opacity-50"
             >
               {ocrStatus === "loading" ? (
                 <Loader2 size={10} strokeWidth={3} className="animate-spin" />
               ) : (
                 <Camera size={10} strokeWidth={3} />
               )}
-              {ocrStatus === "loading" ? "Scanning…" : "Scan your receipt"}
+              {ocrStatus === "loading" ? "Scanning…" : "Take Photo"}
+            </button>
+            <button
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={ocrStatus === "loading"}
+              className="stamp stamp-burnt flex-1 justify-center disabled:opacity-50"
+            >
+              <Upload size={10} strokeWidth={3} />
+              Choose Photo
             </button>
             <input
-              ref={receiptInputRef}
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
+              onChange={handleReceiptCapture}
+              className="hidden"
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
               onChange={handleReceiptCapture}
               className="hidden"
             />
